@@ -1,0 +1,50 @@
+name: Agent Task
+description: Structured issue template for free or local coding agents working on this repository
+title: "[Agent Task]: "
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: Describe the problem to solve or the feature to implement.
+      placeholder: Example: Fix the tenant exit request so the admin dashboard updates immediately.
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Current Behavior
+      description: Explain what happens today.
+      placeholder: Example: The request is stored, but the dashboard does not refresh the spot state until a full reload.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: Explain the expected result after the change.
+      placeholder: Example: The dashboard should reflect the exit request without reloading the page.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope And Constraints
+      description: Mention relevant files, routes, screens, or business rules that must be respected.
+      placeholder: Example: Keep the existing API paths and do not change payment rules.
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: Describe how the result should be tested.
+      placeholder: Example: Run npm run check and verify the exit flow in the admin and tenant screens.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional Notes
+      description: Optional links, screenshots, or references.
