@@ -1,0 +1,13 @@
+{
+  "name": "estacionamiento-admin",
+  "version": "1.0.0",
+  "description": "Sistema web para administracion de estacionamiento con cajones fijos e inquilinos pensionados.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

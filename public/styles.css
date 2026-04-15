@@ -1,0 +1,487 @@
+:root {
+  --bg: #f4efe6;
+  --paper: rgba(255, 251, 245, 0.82);
+  --paper-strong: #fffaf2;
+  --ink: #1f1a17;
+  --muted: #6b6258;
+  --accent: #c4742f;
+  --accent-dark: #8b4d15;
+  --line: #dbccb9;
+  --success: #3f8f59;
+  --danger: #b4423b;
+  --warning: #d9a21b;
+  --shadow: 0 18px 45px rgba(88, 61, 31, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Sora', sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(255, 211, 148, 0.45), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(194, 130, 57, 0.2), transparent 28%),
+    linear-gradient(135deg, #f7f1e8 0%, #f0e6d9 48%, #e9ddcc 100%);
+}
+
+.page-shell {
+  width: min(1380px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 24px 0 40px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 28px;
+  border: 1px solid rgba(139, 77, 21, 0.16);
+  background: linear-gradient(135deg, rgba(255, 250, 242, 0.95), rgba(250, 236, 216, 0.8));
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+}
+
+.hero.compact {
+  align-items: center;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+  color: var(--accent-dark);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+h1 {
+  font-size: clamp(2rem, 4vw, 3.6rem);
+}
+
+.hero-copy,
+.panel-header p,
+.metric-label,
+label,
+th,
+td,
+.summary-box,
+.list-item p,
+.parking-spot span {
+  color: var(--muted);
+}
+
+.hero-actions,
+.form-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.button {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, var(--accent), #da9652);
+  color: white;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 10px 25px rgba(196, 116, 47, 0.28);
+}
+
+.button.secondary {
+  background: white;
+  color: var(--accent-dark);
+  border: 1px solid rgba(139, 77, 21, 0.18);
+  box-shadow: none;
+  text-decoration: none;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 22px 0;
+}
+
+.metric-card,
+.panel {
+  background: var(--paper);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(139, 77, 21, 0.12);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+
+.metric-card {
+  padding: 20px;
+}
+
+.metric-value {
+  display: block;
+  margin-top: 6px;
+  font-size: 2rem;
+  color: var(--ink);
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 20px;
+}
+
+.content-grid.single-column {
+  grid-template-columns: minmax(320px, 760px);
+  justify-content: center;
+}
+
+.panel {
+  padding: 20px;
+}
+
+.panel-wide {
+  grid-column: 1 / -1;
+}
+
+.panel-subsection {
+  padding: 18px;
+  background: rgba(255, 250, 242, 0.92);
+  border: 1px solid rgba(139, 77, 21, 0.14);
+  border-radius: 22px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.stack-form,
+.tenant-form-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.tenant-form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.notes-field,
+.form-actions {
+  grid-column: 1 / -1;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.92rem;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--paper-strong);
+  padding: 12px 14px;
+  font: inherit;
+  color: var(--ink);
+}
+
+.parking-layout-grid {
+  display: grid;
+  grid-template-columns: minmax(820px, 1fr) 320px;
+  gap: 18px;
+  align-items: start;
+}
+
+.parking-map-wrap {
+  overflow: auto;
+  padding-bottom: 6px;
+}
+
+.parking-map {
+  width: 100%;
+  min-width: 1040px;
+  aspect-ratio: 1066 / 748;
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 235, 223, 0.98));
+  border: 2px solid #26211d;
+  position: relative;
+  box-shadow: inset 0 0 0 1px rgba(38, 33, 29, 0.12);
+}
+
+.parking-spot {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  border: 2px dashed #9fcb4a;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  padding: 8px 9px 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.parking-spot::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  height: 6px;
+  border-radius: 999px;
+  background: #f3c322;
+}
+
+.parking-spot:hover,
+.parking-spot.selected {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 24px rgba(31, 26, 23, 0.16);
+}
+
+.parking-spot.selected {
+  outline: 3px solid rgba(196, 116, 47, 0.28);
+}
+
+.parking-spot.horizontal {
+  padding-bottom: 12px;
+}
+
+.parking-spot.libre {
+  border-color: #8cb930;
+}
+
+.parking-spot.ocupado {
+  border-color: var(--success);
+}
+
+.parking-spot.salida {
+  border-color: var(--accent);
+}
+
+.parking-spot.adeudo {
+  border-color: var(--danger);
+}
+
+.parking-spot.temporal {
+  border-style: solid;
+}
+
+.spot-number {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111;
+}
+
+.spot-name {
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+
+.spot-meta {
+  font-size: 0.74rem;
+  color: var(--ink);
+}
+
+.center-block {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(38, 33, 29, 0.5);
+  background: #d6d3d1;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  border-radius: 4px;
+}
+
+.caseta {
+  background: #cac5c0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(219, 204, 185, 0.8);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.status-pill.ok {
+  background: rgba(63, 143, 89, 0.12);
+  color: var(--success);
+}
+
+.status-pill.warn {
+  background: rgba(180, 66, 59, 0.12);
+  color: var(--danger);
+}
+
+.list {
+  display: grid;
+  gap: 12px;
+}
+
+.list-item,
+.summary-box {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 250, 242, 0.88);
+  border: 1px solid rgba(139, 77, 21, 0.14);
+}
+
+.list-item h3,
+.summary-box strong {
+  color: var(--ink);
+}
+
+.actions-inline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actions-inline button {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 77, 21, 0.18);
+  background: white;
+  cursor: pointer;
+}
+
+.spot-control {
+  position: sticky;
+  top: 16px;
+}
+
+.compact-header {
+  margin-bottom: 12px;
+}
+
+.spot-state-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.spot-state-actions .button.secondary {
+  text-align: center;
+}
+
+.spot-legend {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.spot-legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.legend-swatch.libre {
+  background: #8cb930;
+}
+
+.legend-swatch.ocupado {
+  background: var(--success);
+}
+
+.legend-swatch.salida {
+  background: var(--accent);
+}
+
+.hidden {
+  display: none;
+}
+
+.flash {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  color: white;
+  background: rgba(31, 26, 23, 0.92);
+  box-shadow: var(--shadow);
+  z-index: 10;
+}
+
+@media (max-width: 1080px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .parking-layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tenant-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .page-shell {
+    width: min(100vw - 18px, 100%);
+  }
+
+  .hero {
+    flex-direction: column;
+  }
+
+  .tenant-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .parking-map {
+    min-width: 960px;
+  }
+}
