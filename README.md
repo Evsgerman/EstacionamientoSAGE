@@ -27,6 +27,17 @@ npm start
 
 Abre http://localhost:3000
 
+Si el puerto 3000 ya esta ocupado, puedes iniciar la aplicacion en otro puerto.
+
+PowerShell:
+
+```powershell
+$env:PORT=2530
+npm start
+```
+
+Luego abre http://localhost:2530
+
 ## Base de datos
 
 El archivo se crea en [data/estacionamiento.db](data/estacionamiento.db).
