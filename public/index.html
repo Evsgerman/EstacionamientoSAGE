@@ -26,6 +26,7 @@
           <a class="button secondary" href="/tenant.html">Portal de inquilinos</a>
           <button class="button secondary" id="openRecentPayments">Pagos recientes</button>
           <button class="button" id="refreshDashboard">Actualizar tablero</button>
+          <button class="button secondary hidden" id="logoutAdmin">Cerrar sesion</button>
         </div>
       </header>
 
@@ -177,6 +178,10 @@
               </select>
             </label>
             <label>
+              Mes que se paga
+              <input type="month" name="paidMonth" required />
+            </label>
+            <label>
               Concepto
               <input type="text" name="concept" value="Pago registrado desde administrador" required />
             </label>
@@ -226,6 +231,26 @@
           <button class="button secondary" type="button" id="closeRecentPayments">Cerrar</button>
         </div>
         <div class="list modal-list" id="recentPaymentsList"></div>
+      </section>
+    </div>
+
+    <div class="auth-shell" id="adminAuthGate" aria-hidden="false">
+      <section class="auth-card" aria-labelledby="adminAuthTitle">
+        <p class="eyebrow">Acceso protegido</p>
+        <h2 id="adminAuthTitle">Acceso de administrador</h2>
+        <p class="auth-copy">Ingresa tu usuario y contraseña para abrir el portal administrativo de SAGE.</p>
+        <form id="adminAccessForm" class="auth-form">
+          <label>
+            Usuario
+            <input type="text" name="username" id="adminUsername" autocomplete="username" required />
+          </label>
+          <label>
+            Contraseña
+            <input type="password" name="password" id="adminPassword" autocomplete="current-password" required />
+          </label>
+          <button class="button" type="submit">Entrar al portal</button>
+        </form>
+        <p class="auth-status" id="adminAuthStatus">Ingresa tus credenciales de administrador para abrir el portal.</p>
       </section>
     </div>
 

@@ -1,5 +1,6 @@
 const path = require('path');
 const express = require('express');
+const crypto = require('crypto');
 const { generatePaymentReceiptPdf } = require('./paymentReceipt');
 const {
   getDashboardData,
@@ -17,14 +18,87 @@ const {
   completeExit,
   setSpotState,
   findTenantAccess,
-  getTenantCount
+  getTenantCount,
+  verifyAdminCredentials
 } = require('./db');
 
 const app = express();
 const port = process.env.PORT || 3000;
+const ADMIN_SESSION_COOKIE = 'sage_admin_session';
+const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const adminSessions = new Map();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+function parseCookies(cookieHeader = '') {
+  return cookieHeader
+    .split(';')
+    .map((cookie) => cookie.trim())
+    .filter(Boolean)
+    .reduce((cookies, pair) => {
+      const separatorIndex = pair.indexOf('=');
+      if (separatorIndex === -1) {
+        return cookies;
+      }
+
+      const key = pair.slice(0, separatorIndex);
+      const value = decodeURIComponent(pair.slice(separatorIndex + 1));
+      cookies[key] = value;
+      return cookies;
+    }, {});
+}
+
+function clearExpiredAdminSessions() {
+  const now = Date.now();
+  for (const [token, expiresAt] of adminSessions.entries()) {
+    if (expiresAt <= now) {
+      adminSessions.delete(token);
+    }
+  }
+}
+
+function createAdminSession() {
+  clearExpiredAdminSessions();
+  const token = crypto.randomUUID();
+  adminSessions.set(token, Date.now() + ADMIN_SESSION_TTL_MS);
+  return token;
+}
+
+function getAdminSession(req) {
+  clearExpiredAdminSessions();
+  const cookies = parseCookies(req.headers.cookie || '');
+  const token = cookies[ADMIN_SESSION_COOKIE];
+  if (!token) {
+    return null;
+  }
+
+  const expiresAt = adminSessions.get(token);
+  if (!expiresAt || expiresAt <= Date.now()) {
+    adminSessions.delete(token);
+    return null;
+  }
+
+  return token;
+}
+
+function setAdminSessionCookie(res, token) {
+  res.setHeader('Set-Cookie', `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(token)}; Max-Age=${Math.floor(ADMIN_SESSION_TTL_MS / 1000)}; Path=/; HttpOnly; SameSite=Lax`);
+}
+
+function clearAdminSessionCookie(res) {
+  res.setHeader('Set-Cookie', `${ADMIN_SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`);
+}
+
+function requireAdminSession(req, res, next) {
+  const sessionToken = getAdminSession(req);
+  if (!sessionToken) {
+    res.status(401).json({ error: 'Acceso de administrador requerido.' });
+    return;
+  }
+
+  next();
+}
 
 function normalizeTenantPayload(body, existing = {}) {
   const tenantType = body.tenantType === 'temporal' ? 'temporal' : 'pension';
@@ -49,6 +123,72 @@ function handleError(res, error) {
   res.status(400).json({ error: error.message || 'Ocurrio un error inesperado.' });
 }
 
+app.get('/api/admin/session', (req, res) => {
+  res.json({ authenticated: Boolean(getAdminSession(req)) });
+});
+
+app.post('/api/admin/login', (req, res) => {
+  try {
+    const username = String(req.body.username || '').trim();
+    const password = String(req.body.password || '').trim();
+
+    if (!verifyAdminCredentials({ username, password })) {
+      throw new Error('Credenciales de administrador invalidas.');
+    }
+
+    const token = createAdminSession();
+    setAdminSessionCookie(res, token);
+    res.json({ ok: true, authenticated: true });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+app.post('/api/admin/logout', (req, res) => {
+  const sessionToken = getAdminSession(req);
+  if (sessionToken) {
+    adminSessions.delete(sessionToken);
+  }
+
+  clearAdminSessionCookie(res);
+  res.json({ ok: true });
+});
+
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, service: 'estacionamiento-admin' });
+});
+
+app.post('/api/access/login', (req, res) => {
+  try {
+    const tenant = findTenantAccess({
+      fullName: String(req.body.fullName || '').trim(),
+      plate: String(req.body.plate || '').trim().toUpperCase()
+    });
+
+    if (!tenant || !tenant.accessEnabled) {
+      throw new Error('Acceso invalido. Verifica nombre y placa.');
+    }
+
+    res.json(tenant);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+app.post('/api/entries/request-exit', (req, res) => {
+  try {
+    const entry = requestExit({
+      plate: String(req.body.plate || '').trim().toUpperCase(),
+      fullName: String(req.body.fullName || '').trim()
+    });
+    res.json(entry);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+app.use('/api', requireAdminSession);
+
 app.get('/api/dashboard', (_req, res) => {
   res.json(getDashboardData());
 });
@@ -65,7 +205,7 @@ app.get('/api/payments', (_req, res) => {
   res.json({ payments: listRecentPayments() });
 });
 
-app.get('/api/payments/:id/receipt.pdf', (req, res) => {
+app.get('/api/payments/:id/receipt.pdf', async (req, res) => {
   try {
     const payment = getPaymentById(Number(req.params.id));
 
@@ -77,7 +217,7 @@ app.get('/api/payments/:id/receipt.pdf', (req, res) => {
       return res.status(400).json({ error: 'Ese pago no genera comprobante de pension liquidada.' });
     }
 
-    generatePaymentReceiptPdf(res, payment);
+    await generatePaymentReceiptPdf(res, payment);
   } catch (error) {
     handleError(res, error);
   }
@@ -130,7 +270,8 @@ app.post('/api/tenants/:id/payment', (req, res) => {
       tenantId: Number(req.params.id),
       amount: Number(req.body.amount),
       paymentMethod: String(req.body.paymentMethod || 'efectivo'),
-      concept: String(req.body.concept || 'Pago de pension')
+      concept: String(req.body.concept || 'Pago de pension'),
+      paidMonth: String(req.body.paidMonth || '')
     });
     res.json(result);
   } catch (error) {
@@ -164,18 +305,6 @@ app.post('/api/entries', (req, res) => {
   }
 });
 
-app.post('/api/entries/request-exit', (req, res) => {
-  try {
-    const entry = requestExit({
-      plate: String(req.body.plate || '').trim().toUpperCase(),
-      fullName: String(req.body.fullName || '').trim()
-    });
-    res.json(entry);
-  } catch (error) {
-    handleError(res, error);
-  }
-});
-
 app.post('/api/entries/:id/complete-exit', (req, res) => {
   try {
     const entry = completeExit(Number(req.params.id));
@@ -197,27 +326,6 @@ app.patch('/api/spots/:id/state', (req, res) => {
   } catch (error) {
     handleError(res, error);
   }
-});
-
-app.post('/api/access/login', (req, res) => {
-  try {
-    const tenant = findTenantAccess({
-      fullName: String(req.body.fullName || '').trim(),
-      plate: String(req.body.plate || '').trim().toUpperCase()
-    });
-
-    if (!tenant || !tenant.accessEnabled) {
-      throw new Error('Acceso invalido. Verifica nombre y placa.');
-    }
-
-    res.json(tenant);
-  } catch (error) {
-    handleError(res, error);
-  }
-});
-
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'estacionamiento-admin' });
 });
 
 app.listen(port, () => {

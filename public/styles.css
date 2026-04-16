@@ -65,14 +65,14 @@ body.modal-open {
 }
 
 .brand-logo {
-  width: clamp(190px, 22vw, 320px);
+  width: clamp(210px, 24vw, 340px);
   height: auto;
   flex: 0 0 auto;
   display: block;
 }
 
 .small-logo {
-  width: clamp(150px, 18vw, 230px);
+  width: clamp(170px, 20vw, 250px);
 }
 
 .eyebrow {
@@ -293,11 +293,25 @@ textarea {
   gap: 6px;
 }
 
+.parking-spot.compact-spot .spot-mark {
+  gap: 1px;
+  transform: translateY(-2px);
+}
+
+.parking-spot.compact-spot .spot-number {
+  font-size: clamp(0.88rem, 0.5vw + 0.56rem, 1.02rem);
+}
+
 .spot-line {
   width: 30px;
   height: 5px;
   border-radius: 999px;
   background: #f3c322;
+}
+
+.parking-spot.compact-spot .spot-line {
+  width: 16px;
+  height: 3px;
 }
 
 .parking-spot:hover,
@@ -314,16 +328,41 @@ textarea {
   padding-bottom: 8px;
 }
 
+.parking-spot.horizontal .spot-mark {
+  gap: 4px;
+}
+
+.parking-spot.horizontal .spot-number {
+  font-size: clamp(1.05rem, 0.8vw + 0.65rem, 1.35rem);
+}
+
+.parking-spot.horizontal .spot-line {
+  width: 22px;
+  height: 4px;
+}
+
+.parking-spot.horizontal.compact-spot .spot-line {
+  width: 14px;
+}
+
+.parking-spot.horizontal.compact-spot .spot-number {
+  font-size: clamp(0.82rem, 0.42vw + 0.54rem, 0.96rem);
+}
+
 .parking-spot.libre {
   border-color: #8cb930;
 }
 
 .parking-spot.ocupado {
   border-color: var(--success);
+  background: linear-gradient(180deg, #58b874, #3f8f59);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 12px 24px rgba(63, 143, 89, 0.24);
 }
 
 .parking-spot.salida {
   border-color: var(--accent);
+  background: linear-gradient(180deg, #ffd9b0, #f3b56f);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 12px 24px rgba(196, 116, 47, 0.2);
 }
 
 .parking-spot.adeudo {
@@ -341,6 +380,10 @@ textarea {
   color: #111;
 }
 
+.parking-spot.ocupado .spot-number {
+  color: #fff;
+}
+
 .center-block {
   position: absolute;
   display: grid;
@@ -348,9 +391,18 @@ textarea {
   border: 2px solid rgba(38, 33, 29, 0.5);
   background: #d6d3d1;
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.8rem;
+  font-size: clamp(1rem, 1vw + 0.25rem, 1.35rem);
   font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-align: center;
+  padding: 4px;
   border-radius: 4px;
+  overflow: hidden;
+}
+
+.center-block-spot-25 {
+  aspect-ratio: 11.4 / 9.6;
 }
 
 .caseta {
@@ -504,6 +556,49 @@ td {
   background: rgba(31, 26, 23, 0.92);
   box-shadow: var(--shadow);
   z-index: 10;
+}
+
+.auth-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(31, 26, 23, 0.42);
+  backdrop-filter: blur(10px);
+}
+
+.auth-shell.hidden {
+  display: none;
+}
+
+.auth-card {
+  width: min(460px, calc(100vw - 28px));
+  padding: 28px;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 251, 245, 0.99), rgba(247, 236, 219, 0.96));
+  border: 1px solid rgba(139, 77, 21, 0.18);
+  box-shadow: 0 24px 60px rgba(31, 26, 23, 0.28);
+}
+
+.auth-copy,
+.auth-status {
+  color: var(--muted);
+}
+
+.auth-copy {
+  margin: 12px 0 18px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-status {
+  margin: 14px 0 0;
+  font-size: 0.95rem;
 }
 
 .modal-shell {

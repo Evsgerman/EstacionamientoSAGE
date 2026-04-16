@@ -1,9 +1,6 @@
-const fs = require('fs');
-const path = require('path');
 const PDFDocument = require('pdfkit');
-const SVGtoPDF = require('svg-to-pdfkit');
-
-const logoPath = path.join(__dirname, '..', 'public', 'assets', 'sage-logo.svg');
+const bwipjs = require('bwip-js');
+const QRCode = require('qrcode');
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('es-MX', {
@@ -19,6 +16,20 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function formatPaidMonth(value) {
+  const normalized = String(value || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(normalized)) {
+    return 'Mes no especificado';
+  }
+
+  const label = new Intl.DateTimeFormat('es-MX', {
+    month: 'long',
+    year: 'numeric'
+  }).format(new Date(`${normalized}-01T12:00:00`));
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function buildFilename(payment) {
   const safeName = String(payment.tenantName || 'inquilino')
     .toLowerCase()
@@ -28,157 +39,163 @@ function buildFilename(payment) {
   return `comprobante-${payment.receiptFolio || payment.id}-${safeName}.pdf`;
 }
 
+function buildCaptureLine(payment) {
+  if (payment.captureLine) {
+    return payment.captureLine;
+  }
+
+  const paidMonth = String(payment.paidMonth || new Date(payment.paidAt || Date.now()).toISOString().slice(0, 7)).replace('-', '');
+  return `LCSAGE-${paidMonth}-${String(payment.tenantId || 0).padStart(4, '0')}-${String(payment.id || 0).padStart(6, '0')}`;
+}
+
+function buildReceiptNote(payment) {
+  return payment.receiptNote || 'IMPORTANTE:El estacionamiento NO se hace responsable de los danos, robo parcial o total de su vehiculo, asi como, de los objetos olvidados dentro del mismo. Estos codigos de verificacion contienen los datos encriptados del recibo y se utilizan para validar la integridad de los mismos; El presente boleto solo avala la recepcion del monto por el concepto expresado en el mismo y en ningun momento exime de cualquier otro adeudo o pendiente de pago que se tenga.';
+}
+
+function buildQrText(payment) {
+  return [
+    'SAGE Estacionamiento',
+    `Folio: ${payment.receiptFolio || payment.id}`,
+    `Inquilino: ${payment.tenantName}`,
+    `Monto pagado: ${formatCurrency(payment.amount)}`,
+    `Mes pagado: ${formatPaidMonth(payment.paidMonth)}`,
+    `Linea de captura: ${buildCaptureLine(payment)}`
+  ].join('\n');
+}
+
 function drawLabelValue(doc, label, value, x, y, width) {
   doc
     .font('Helvetica-Bold')
     .fontSize(10)
-    .fillColor('#8B4D15')
+    .fillColor('#7A5C3E')
     .text(label, x, y, { width })
     .moveDown(0.25)
     .font('Helvetica')
     .fontSize(12)
-    .fillColor('#1F1A17')
+    .fillColor('#2E2623')
     .text(value, x, doc.y, { width });
 }
 
-function generatePaymentReceiptPdf(res, payment) {
-  const doc = new PDFDocument({ size: 'A4', margin: 42 });
+async function generatePaymentReceiptPdf(res, payment) {
+  const doc = new PDFDocument({ size: 'A4', margin: 30 });
   const filename = buildFilename(payment);
+  const barcodeBuffer = await bwipjs.toBuffer({
+    bcid: 'code128',
+    text: buildCaptureLine(payment),
+    scale: 2,
+    height: 14,
+    includetext: false,
+    backgroundcolor: 'FFFFFF'
+  });
+  const qrBuffer = await QRCode.toBuffer(buildQrText(payment), {
+    errorCorrectionLevel: 'M',
+    margin: 1,
+    width: 164,
+    color: {
+      dark: '#1F1A17',
+      light: '#0000'
+    }
+  });
+  const paymentMonthLabel = formatPaidMonth(payment.paidMonth);
+  const receiptNote = buildReceiptNote(payment);
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
 
   doc.pipe(res);
 
-  doc.roundedRect(24, 24, 547, 795, 24).fillAndStroke('#FFF9F1', '#E4D5C3');
-
-  if (fs.existsSync(logoPath)) {
-    const logoSvg = fs.readFileSync(logoPath, 'utf8');
-    SVGtoPDF(doc, logoSvg, 46, 38, { width: 220, height: 78, assumePt: true });
-  } else {
-    doc.font('Helvetica-Bold').fontSize(28).fillColor('#1F1A17').text('SAGE', 46, 52);
-    doc.font('Helvetica-Oblique').fontSize(16).fillColor('#4E4A46').text('ESTACIONAMIENTO', 46, 86);
-  }
+  doc.roundedRect(24, 24, 547, 795, 24).fillAndStroke('#FCF8F3', '#CDB9A4');
 
   doc
     .roundedRect(380, 44, 150, 70, 18)
-    .fillAndStroke('#F6E5D4', '#D9B998');
+    .fillAndStroke('#EADFD6', '#B69A80');
 
   doc
     .font('Helvetica-Bold')
     .fontSize(11)
-    .fillColor('#8B4D15')
+    .fillColor('#7B6247')
     .text('COMPROBANTE', 402, 60, { width: 108, align: 'center' })
     .fontSize(15)
-    .fillColor('#1F1A17')
+    .fillColor('#5D2F3A')
     .text(payment.receiptFolio || `PAGO-${payment.id}`, 394, 79, { width: 124, align: 'center' });
 
   doc
     .font('Helvetica-Bold')
-    .fontSize(22)
-    .fillColor('#1F1A17')
-    .text('Comprobante de pago de pension', 46, 138)
-    .font('Helvetica')
-    .fontSize(11)
-    .fillColor('#6B6258')
-    .text('Documento emitido cuando el inquilino liquida por completo su pension mensual.', 46, 168, {
-      width: 485
-    });
+    .fontSize(18)
+    .fillColor('#5D2F3A')
+    .text('Comprobante de pago de pension', 46, 58);
 
   doc
-    .roundedRect(46, 210, 485, 112, 20)
-    .fillAndStroke('#FFFFFF', '#E4D5C3');
+    .roundedRect(46, 152, 485, 118, 20)
+    .fillAndStroke('#FFFFFF', '#D8C9BB');
 
-  drawLabelValue(doc, 'Inquilino', payment.tenantName, 64, 230, 190);
-  drawLabelValue(doc, 'Placa', payment.plate, 262, 230, 120);
-  drawLabelValue(doc, 'Cajon', String(payment.assignedSpotNumber || 'Sin asignar'), 394, 230, 110);
-  drawLabelValue(doc, 'Metodo de pago', payment.paymentMethod, 64, 280, 190);
-  drawLabelValue(doc, 'Fecha de pago', formatDate(payment.paidAt), 262, 280, 242);
+  drawLabelValue(doc, 'Inquilino', payment.tenantName, 64, 170, 190);
+  drawLabelValue(doc, 'Placa', payment.plate, 262, 170, 120);
+  drawLabelValue(doc, 'Cajon', String(payment.assignedSpotNumber || 'Sin asignar'), 394, 170, 110);
+  drawLabelValue(doc, 'Metodo de pago', payment.paymentMethod, 64, 218, 190);
+  drawLabelValue(doc, 'Fecha de pago', formatDate(payment.paidAt), 262, 218, 136);
+  drawLabelValue(doc, 'Mes pagado', paymentMonthLabel, 406, 218, 108);
 
   doc
-    .roundedRect(46, 344, 232, 128, 20)
-    .fillAndStroke('#FFF4EA', '#E4D5C3');
+    .roundedRect(46, 300, 150, 112, 20)
+    .fillAndStroke('#F6E8E2', '#C8A394');
 
   doc
     .font('Helvetica-Bold')
     .fontSize(11)
-    .fillColor('#8B4D15')
-    .text('Monto pagado', 64, 364)
+    .fillColor('#7C5A45')
+    .text('Monto pagado', 64, 318)
     .fontSize(30)
-    .fillColor('#B4142F')
-    .text(formatCurrency(payment.amount), 64, 388)
-    .font('Helvetica')
-    .fontSize(11)
-    .fillColor('#6B6258')
-    .text(payment.concept, 64, 428, { width: 186 });
+    .fillColor('#8B2E3C')
+    .text(formatCurrency(payment.amount), 64, 342);
 
   doc
-    .roundedRect(298, 344, 233, 128, 20)
-    .fillAndStroke('#F2F8F7', '#D4E0DD');
+    .roundedRect(210, 300, 150, 112, 20)
+    .fillAndStroke('#F3EBDD', '#C6B08A');
 
   doc
     .font('Helvetica-Bold')
     .fontSize(11)
-    .fillColor('#277253')
-    .text('Saldo posterior al pago', 316, 364)
-    .fontSize(30)
-    .fillColor('#277253')
-    .text(formatCurrency(payment.balanceAfter), 316, 388)
+    .fillColor('#78624A')
+    .text('Mes que se paga', 228, 318)
     .font('Helvetica-Bold')
-    .fontSize(12)
-    .fillColor('#1F1A17')
-    .text(payment.paidInFull ? 'Pension liquidada por completo' : 'Pago parcial registrado', 316, 430, { width: 185 });
+    .fontSize(20)
+    .fillColor('#5F4837')
+    .text(paymentMonthLabel, 228, 344, { width: 118 });
 
   doc
-    .roundedRect(46, 494, 485, 180, 20)
-    .fillAndStroke('#FFFFFF', '#E4D5C3');
+    .roundedRect(374, 300, 157, 146, 20)
+    .fillAndStroke('#EDF2F4', '#9BAEB7');
 
   doc
     .font('Helvetica-Bold')
-    .fontSize(12)
-    .fillColor('#1F1A17')
-    .text('Resumen del comprobante', 64, 516)
-    .font('Helvetica')
     .fontSize(11)
-    .fillColor('#4E4A46')
-    .text(
-      `Se recibio el pago de ${formatCurrency(payment.amount)} correspondiente a la pension del cajon ${payment.assignedSpotNumber || 'sin asignar'}. El movimiento fue registrado con el folio ${payment.receiptFolio || payment.id} y el saldo del inquilino quedo en ${formatCurrency(payment.balanceAfter)}.`,
-      64,
-      544,
-      { width: 450, lineGap: 4 }
-    );
+    .fillColor('#465B67')
+    .text('Codigo QR de validacion', 390, 316, { width: 125, align: 'center' });
+
+  doc.image(qrBuffer, 402, 342, { fit: [96, 96], align: 'center', valign: 'center' });
 
   doc
-    .moveTo(64, 648)
-    .lineTo(250, 648)
-    .strokeColor('#D4B394')
-    .stroke();
-
-  doc
-    .font('Helvetica-Bold')
-    .fontSize(10)
-    .fillColor('#8B4D15')
-    .text('Validado por SAGE Estacionamiento', 64, 656)
-    .font('Helvetica')
-    .fontSize(10)
-    .fillColor('#6B6258')
-    .text('Este comprobante se genera automaticamente desde el sistema administrativo.', 64, 672, { width: 280 });
-
-  doc
-    .roundedRect(46, 708, 485, 72, 18)
-    .fillAndStroke('#1F1A17', '#1F1A17');
+    .roundedRect(46, 464, 485, 96, 20)
+    .fillAndStroke('#F3F1F4', '#AAA1B3');
 
   doc
     .font('Helvetica-Bold')
     .fontSize(12)
-    .fillColor('#FFFFFF')
-    .text('SAGE Estacionamiento', 64, 726)
+    .fillColor('#5A5368')
+    .text('Codigo de barras de validacion', 64, 480)
+
+  doc.image(barcodeBuffer, 96, 504, { fit: [384, 28], align: 'center', valign: 'center' });
+
+  doc
+    .roundedRect(46, 582, 485, 114, 18)
+    .fillAndStroke('#F6F0E3', '#C7B08A');
+
+  doc
     .font('Helvetica')
     .fontSize(10)
-    .fillColor('#EDE6DD')
-    .text('Comprobante emitido en formato PDF para control interno y entrega al inquilino.', 64, 746, {
-      width: 420
-    });
+    .fillColor('#4F433B')
+    .text(receiptNote, 64, 596, { width: 450, lineGap: 2, align: 'justify' });
 
   doc.end();
 }

@@ -1,13 +1,16 @@
 const state = {
   dashboard: null,
   tenants: [],
-  selectedSpotId: null
+  selectedSpotId: null,
+  authenticated: false
 };
 
 const STATIC_BLOCKS = [
-  { text: 'BANO', x: 46.6, y: 24.0, w: 12.5, h: 13.5, className: 'center-block' },
-  { text: 'CASETA', x: 35.6, y: 79.2, w: 10.6, h: 12.4, className: 'center-block caseta' }
+  { text: 'BANO', x: 51.5, y: 22.8, w: 11.4, h: 9.6, className: 'center-block center-block-spot-25' },
+  { text: 'CASETA', x: 35.6, y: 80.4, w: 10.6, h: 10.0, className: 'center-block caseta' }
 ];
+
+const COMPACT_SPOT_NUMBERS = new Set([35, 36, 39, 41, 42]);
 
 const metricsContainer = document.getElementById('metrics');
 const parkingMap = document.getElementById('parkingMap');
@@ -26,6 +29,12 @@ const selectedSpotCard = document.getElementById('selectedSpotCard');
 const cancelPaymentFormButton = document.getElementById('cancelPaymentForm');
 const closeRecentPaymentsButton = document.getElementById('closeRecentPayments');
 const paymentFormTitle = document.getElementById('paymentFormTitle');
+const adminAuthGate = document.getElementById('adminAuthGate');
+const adminAccessForm = document.getElementById('adminAccessForm');
+const adminUsernameInput = document.getElementById('adminUsername');
+const adminPasswordInput = document.getElementById('adminPassword');
+const adminAuthStatus = document.getElementById('adminAuthStatus');
+const logoutAdminButton = document.getElementById('logoutAdmin');
 
 function showFlash(message, isError = false) {
   const flash = document.createElement('div');
@@ -44,7 +53,12 @@ async function api(path, options = {}) {
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.error || 'No fue posible completar la accion.');
+    const error = new Error(data.error || 'No fue posible completar la accion.');
+    if (response.status === 401) {
+      error.isUnauthorized = true;
+      setAdminAuthState(false, 'La sesion de administrador expiro. Ingresa tu clave para continuar.');
+    }
+    throw error;
   }
   return data;
 }
@@ -56,8 +70,54 @@ function formatMoney(value) {
   }).format(Number(value || 0));
 }
 
+function currentPaidMonth() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function formatPaidMonth(value) {
+  if (!/^\d{4}-\d{2}$/.test(String(value || '').trim())) {
+    return 'Mes no especificado';
+  }
+
+  const label = new Intl.DateTimeFormat('es-MX', {
+    month: 'long',
+    year: 'numeric'
+  }).format(new Date(`${value}-01T12:00:00`));
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function getSelectedSpot() {
   return state.dashboard?.spots.find((spot) => spot.id === state.selectedSpotId) || null;
+}
+
+function clearDashboardView() {
+  state.dashboard = null;
+  state.tenants = [];
+  state.selectedSpotId = null;
+  metricsContainer.innerHTML = '';
+  parkingMap.innerHTML = '';
+  requestsList.innerHTML = '';
+  recentPaymentsList.innerHTML = '';
+  tenantsTable.innerHTML = '';
+  selectedSpotCard.innerHTML = '<p>Ingresa con la clave de administrador para habilitar el tablero.</p>';
+  hidePaymentForm();
+  renderSpotOptions([]);
+  closeRecentPaymentsModal();
+}
+
+function setAdminAuthState(authenticated, message = '') {
+  state.authenticated = authenticated;
+  adminAuthGate.classList.toggle('hidden', authenticated);
+  adminAuthGate.setAttribute('aria-hidden', authenticated ? 'true' : 'false');
+  logoutAdminButton.classList.toggle('hidden', !authenticated);
+  document.body.classList.toggle('modal-open', !authenticated);
+  adminAuthStatus.textContent = message || (authenticated ? 'Acceso validado.' : 'Ingresa tu clave de administrador para abrir el portal.');
+
+  if (!authenticated) {
+    clearDashboardView();
+    adminUsernameInput.focus();
+  }
 }
 
 function renderMetrics(metrics) {
@@ -136,6 +196,7 @@ function renderMap(spots) {
     element.className = [
       'parking-spot',
       orientation,
+      COMPACT_SPOT_NUMBERS.has(spot.spotNumber) ? 'compact-spot' : '',
       spot.currentState,
       state.selectedSpotId === spot.id ? 'selected' : ''
     ].join(' ');
@@ -192,7 +253,7 @@ function renderRecentPayments(payments) {
     item.className = 'list-item';
     item.innerHTML = `
       <h3>${payment.tenantName} · ${formatMoney(payment.amount)}</h3>
-      <p>${payment.paymentMethod} · ${payment.concept}</p>
+      <p>${payment.paymentMethod} · ${formatPaidMonth(payment.paidMonth)} · ${payment.concept}</p>
       <p>${new Date(payment.paidAt).toLocaleString('es-MX')} · ${payment.plate}</p>
       <div class="list-item-actions">
         ${payment.receiptUrl ? `<a class="button secondary small-button" href="${payment.receiptUrl}" target="_blank" rel="noopener">Descargar comprobante PDF</a>` : ''}
@@ -291,6 +352,7 @@ function openPaymentForm(tenant) {
   paymentForm.tenantId.value = tenant.id;
   paymentForm.amount.value = tenant.pendingAmount > 0 ? tenant.pendingAmount : tenant.monthlyFee;
   paymentForm.paymentMethod.value = tenant.paymentMethod || 'efectivo';
+  paymentForm.paidMonth.value = currentPaidMonth();
   paymentForm.concept.value = 'Pago registrado desde administrador';
   paymentFormTitle.textContent = `Registrar pago de ${tenant.fullName} · Saldo actual ${formatMoney(tenant.pendingAmount)}`;
   paymentForm.classList.remove('hidden');
@@ -299,6 +361,10 @@ function openPaymentForm(tenant) {
 }
 
 async function loadDashboard() {
+  if (!state.authenticated) {
+    return;
+  }
+
   const [dashboard, tenantsPayload, paymentsPayload] = await Promise.all([
     api('/api/dashboard'),
     api('/api/tenants'),
@@ -317,6 +383,18 @@ async function loadDashboard() {
   renderRequests(dashboard.activeEntries);
   renderTenants(tenantsPayload.tenants, tenantsPayload.availableSpots);
   renderRecentPayments(paymentsPayload.payments);
+}
+
+async function initializeApp() {
+  const session = await api('/api/admin/session');
+
+  if (!session.authenticated) {
+    setAdminAuthState(false, 'Ingresa tus credenciales de administrador para abrir el portal.');
+    return;
+  }
+
+  setAdminAuthState(true, 'Acceso validado.');
+  await loadDashboard();
 }
 
 tenantForm.addEventListener('submit', async (event) => {
@@ -384,6 +462,43 @@ cancelPaymentFormButton.addEventListener('click', () => {
 
 closeRecentPaymentsButton.addEventListener('click', () => {
   closeRecentPaymentsModal();
+});
+
+adminAccessForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  try {
+    await api('/api/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: adminUsernameInput.value,
+        password: adminPasswordInput.value
+      })
+    });
+
+    adminAccessForm.reset();
+    setAdminAuthState(true, 'Acceso validado.');
+    await loadDashboard();
+    showFlash('Sesion de administrador iniciada.');
+  } catch (error) {
+    setAdminAuthState(false, error.message);
+    showFlash(error.message, true);
+  }
+});
+
+logoutAdminButton.addEventListener('click', async () => {
+  try {
+    await api('/api/admin/logout', {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+  } catch (_error) {
+    // Si la sesion ya expiro, basta con devolver el portal al estado bloqueado.
+  }
+
+  adminAccessForm.reset();
+  setAdminAuthState(false, 'La sesion se cerro correctamente.');
+  showFlash('Sesion cerrada.');
 });
 
 document.addEventListener('keydown', (event) => {
@@ -498,4 +613,4 @@ document.addEventListener('click', async (event) => {
   }
 });
 
-loadDashboard().catch((error) => showFlash(error.message, true));
+initializeApp().catch((error) => showFlash(error.message, true));

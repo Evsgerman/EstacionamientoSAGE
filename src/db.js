@@ -1,7 +1,12 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 const parkingLayout = require('./parkingLayout');
+
+const DEFAULT_ADMIN_USERNAME = 'adminsage';
+const DEFAULT_ADMIN_PASSWORD_SALT = '867c68dad2f837e6e486785a1f2686a5';
+const DEFAULT_ADMIN_PASSWORD_HASH = '7a96cd85ffe11b0c79235fa56110b3d70827c1bf1e3845bae24575f4bdf8cd78220321ae6f0e3bab82bd1d68f93fd5b8d288719262982ecde0aa2998f416721f';
 
 const dataDir = path.join(__dirname, '..', 'data');
 const dbPath = path.join(dataDir, 'estacionamiento.db');
@@ -77,6 +82,15 @@ db.exec(`
     admin_notified INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id)
   );
+
+  CREATE TABLE IF NOT EXISTS admin_credentials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT NOT NULL UNIQUE,
+    password_salt TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 ensureColumn('parking_spots', 'current_state', "current_state TEXT NOT NULL DEFAULT 'libre'");
@@ -84,6 +98,8 @@ db.exec("UPDATE parking_spots SET current_state = 'libre' WHERE current_state IS
 ensureColumn('payments', 'balance_after', 'balance_after REAL NOT NULL DEFAULT 0');
 ensureColumn('payments', 'paid_in_full', 'paid_in_full INTEGER NOT NULL DEFAULT 0');
 ensureColumn('payments', 'receipt_folio', 'receipt_folio TEXT');
+ensureColumn('payments', 'paid_month', 'paid_month TEXT');
+ensureColumn('payments', 'capture_line', 'capture_line TEXT');
 
 const parkingLayoutMap = new Map(parkingLayout.map((spot) => [spot.spotNumber, spot]));
 
@@ -116,6 +132,24 @@ const insertTenant = db.prepare(`
   )
 `);
 
+const upsertAdminCredential = db.prepare(`
+  INSERT INTO admin_credentials (label, password_salt, password_hash, updated_at)
+  VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+  ON CONFLICT(label) DO UPDATE SET
+    password_salt = excluded.password_salt,
+    password_hash = excluded.password_hash,
+    updated_at = CURRENT_TIMESTAMP
+`);
+
+const deleteLegacyAdminCredentials = db.prepare(`
+  DELETE FROM admin_credentials
+  WHERE lower(label) <> lower(?)
+`);
+
+function hashPassword(password, salt) {
+  return crypto.scryptSync(password, salt, 64).toString('hex');
+}
+
 function seed() {
   db.exec('BEGIN');
 
@@ -144,6 +178,9 @@ function seed() {
         });
       });
     }
+
+    upsertAdminCredential.run(DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD_SALT, DEFAULT_ADMIN_PASSWORD_HASH);
+    deleteLegacyAdminCredentials.run(DEFAULT_ADMIN_USERNAME);
 
     db.exec('COMMIT');
   } catch (error) {
@@ -355,12 +392,55 @@ function mapPayment(row) {
     amount: row.amount,
     paymentMethod: row.payment_method,
     concept: row.concept,
+    paidMonth: row.paid_month || (row.paid_at ? row.paid_at.slice(0, 7) : null),
     balanceAfter: row.balance_after,
     paidInFull: Boolean(row.paid_in_full),
     receiptFolio: row.receipt_folio,
+    captureLine: row.capture_line,
     paidAt: row.paid_at,
     receiptUrl: row.paid_in_full ? `/api/payments/${row.id}/receipt.pdf` : null
   };
+}
+
+function normalizePaidMonth(paidMonth) {
+  const normalized = String(paidMonth || '').trim();
+  if (/^\d{4}-\d{2}$/.test(normalized)) {
+    return normalized;
+  }
+
+  return new Date().toISOString().slice(0, 7);
+}
+
+function buildMonthCode(paidMonth) {
+  const monthIndex = Number(String(paidMonth || '').slice(5, 7));
+  const monthCodes = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  return monthCodes[monthIndex - 1] || 'MES';
+}
+
+function buildReceiptFolio({ paidMonth }) {
+  const monthCode = buildMonthCode(paidMonth);
+  const rows = db.prepare(`
+    SELECT receipt_folio
+    FROM payments
+    WHERE paid_month = ?
+      AND receipt_folio IS NOT NULL
+      AND receipt_folio LIKE ?
+  `).all(paidMonth, `SAGE-%-${monthCode}-%`);
+
+  const nextSequence = rows.reduce((maxValue, row) => {
+    const match = String(row.receipt_folio || '').match(/-(\d{3,})$/);
+    if (!match) {
+      return maxValue;
+    }
+
+    return Math.max(maxValue, Number(match[1]));
+  }, 0) + 1;
+
+  return `SAGE-${monthCode}-${String(nextSequence).padStart(3, '0')}`;
+}
+
+function buildCaptureLine({ paymentId, paidMonth, tenantId }) {
+  return `LCSAGE-${String(paidMonth || '').replace('-', '')}-${String(tenantId).padStart(4, '0')}-${String(paymentId).padStart(6, '0')}`;
 }
 
 function listRecentPayments(limit = 10) {
@@ -476,10 +556,12 @@ function removeTenant(id) {
   `).run(id);
 }
 
-function createPayment({ tenantId, amount, paymentMethod, concept }) {
+function createPayment({ tenantId, amount, paymentMethod, concept, paidMonth }) {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('El monto del pago debe ser mayor a cero.');
   }
+
+  const normalizedPaidMonth = normalizePaidMonth(paidMonth);
 
   const tenant = db.prepare(`
     SELECT id, status, tenant_type, pending_amount
@@ -495,9 +577,9 @@ function createPayment({ tenantId, amount, paymentMethod, concept }) {
 
   try {
     const result = db.prepare(`
-      INSERT INTO payments (tenant_id, amount, payment_method, concept, balance_after, paid_in_full, receipt_folio)
-      VALUES (?, ?, ?, ?, 0, 0, NULL)
-    `).run(tenantId, amount, paymentMethod, concept);
+      INSERT INTO payments (tenant_id, amount, payment_method, concept, paid_month, balance_after, paid_in_full, receipt_folio, capture_line)
+      VALUES (?, ?, ?, ?, ?, 0, 0, NULL, NULL)
+    `).run(tenantId, amount, paymentMethod, concept, normalizedPaidMonth);
 
     db.prepare(`
       UPDATE tenants
@@ -511,14 +593,17 @@ function createPayment({ tenantId, amount, paymentMethod, concept }) {
     const updatedTenant = getTenantById(tenantId);
     const paidInFull = tenant.tenant_type === 'pension' && Number(tenant.pending_amount || 0) > 0 && updatedTenant.pendingAmount === 0;
     const receiptFolio = paidInFull
-      ? `SAGE-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(result.lastInsertRowid).padStart(5, '0')}`
+      ? buildReceiptFolio({ paidMonth: normalizedPaidMonth })
+      : null;
+    const captureLine = paidInFull
+      ? buildCaptureLine({ paymentId: result.lastInsertRowid, paidMonth: normalizedPaidMonth, tenantId })
       : null;
 
     db.prepare(`
       UPDATE payments
-      SET balance_after = ?, paid_in_full = ?, receipt_folio = ?
+      SET balance_after = ?, paid_in_full = ?, receipt_folio = ?, capture_line = ?
       WHERE id = ?
-    `).run(updatedTenant.pendingAmount, paidInFull ? 1 : 0, receiptFolio, result.lastInsertRowid);
+    `).run(updatedTenant.pendingAmount, paidInFull ? 1 : 0, receiptFolio, captureLine, result.lastInsertRowid);
 
     db.exec('COMMIT');
 
@@ -698,6 +783,31 @@ function findTenantAccess({ fullName, plate }) {
   return mapTenant(row);
 }
 
+function verifyAdminCredentials({ username, password }) {
+  const normalizedUsername = String(username || '').trim();
+  const normalizedPassword = String(password || '').trim();
+
+  if (!normalizedUsername || !normalizedPassword) {
+    return false;
+  }
+
+  const credential = db.prepare(`
+    SELECT password_salt, password_hash
+    FROM admin_credentials
+    WHERE lower(label) = lower(?)
+    LIMIT 1
+  `).get(normalizedUsername);
+
+  if (!credential) {
+    return false;
+  }
+
+  const incomingHash = Buffer.from(hashPassword(normalizedPassword, credential.password_salt), 'hex');
+  const storedHash = Buffer.from(credential.password_hash, 'hex');
+
+  return incomingHash.length === storedHash.length && crypto.timingSafeEqual(incomingHash, storedHash);
+}
+
 module.exports = {
   db,
   getDashboardData,
@@ -716,5 +826,6 @@ module.exports = {
   completeExit,
   setSpotState,
   findTenantAccess,
-  getTenantCount
+  getTenantCount,
+  verifyAdminCredentials
 };

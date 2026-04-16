@@ -9,8 +9,10 @@
     "check": "node --check src/server.js && node --check src/db.js && node --check src/parkingLayout.js"
   },
   "dependencies": {
+    "bwip-js": "^4.9.2",
     "express": "^4.21.2",
     "pdfkit": "^0.18.0",
+    "qrcode": "^1.5.4",
     "svg-to-pdfkit": "^0.1.8"
   }
 }
