@@ -21,6 +21,7 @@
         </div>
         <div class="hero-actions">
           <a class="button secondary" href="/tenant.html">Portal de inquilinos</a>
+          <button class="button secondary" id="openRecentPayments">Pagos recientes</button>
           <button class="button" id="refreshDashboard">Actualizar tablero</button>
         </div>
       </header>
@@ -151,6 +152,36 @@
             </div>
           </form>
 
+          <form id="paymentForm" class="payment-form-grid hidden">
+            <div class="panel-subsection payment-panel-header">
+              <div>
+                <p class="eyebrow">Pago</p>
+                <h3 id="paymentFormTitle">Registrar pago</h3>
+              </div>
+              <button class="button secondary" type="button" id="cancelPaymentForm">Cancelar</button>
+            </div>
+            <input type="hidden" name="tenantId" />
+            <label>
+              Monto pagado
+              <input type="number" name="amount" min="0.01" step="0.01" required />
+            </label>
+            <label>
+              Metodo de pago
+              <select name="paymentMethod">
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="tarjeta">Tarjeta</option>
+              </select>
+            </label>
+            <label>
+              Concepto
+              <input type="text" name="concept" value="Pago registrado desde administrador" required />
+            </label>
+            <div class="form-actions">
+              <button class="button" type="submit">Confirmar pago</button>
+            </div>
+          </form>
+
           <div class="table-wrap">
             <table>
               <thead>
@@ -178,6 +209,21 @@
         <strong class="metric-value"></strong>
       </article>
     </template>
+
+    <div class="modal-shell hidden" id="recentPaymentsModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close-recent-payments="true"></div>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="recentPaymentsTitle">
+        <div class="panel-header modal-header">
+          <div>
+            <p class="eyebrow">Historial</p>
+            <h2 id="recentPaymentsTitle">Pagos recientes</h2>
+            <p>Consulta los ultimos movimientos registrados sin salir del tablero.</p>
+          </div>
+          <button class="button secondary" type="button" id="closeRecentPayments">Cerrar</button>
+        </div>
+        <div class="list modal-list" id="recentPaymentsList"></div>
+      </section>
+    </div>
 
     <script src="/app.js"></script>
   </body>

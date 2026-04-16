@@ -13,12 +13,19 @@ const metricsContainer = document.getElementById('metrics');
 const parkingMap = document.getElementById('parkingMap');
 const tenantsTable = document.getElementById('tenantsTable');
 const requestsList = document.getElementById('requestsList');
+const recentPaymentsList = document.getElementById('recentPaymentsList');
+const recentPaymentsModal = document.getElementById('recentPaymentsModal');
 const tenantForm = document.getElementById('tenantForm');
+const paymentForm = document.getElementById('paymentForm');
 const entryForm = document.getElementById('entryForm');
 const spotSelect = document.getElementById('spotSelect');
+const openRecentPaymentsButton = document.getElementById('openRecentPayments');
 const refreshButton = document.getElementById('refreshDashboard');
 const resetTenantFormButton = document.getElementById('resetTenantForm');
 const selectedSpotCard = document.getElementById('selectedSpotCard');
+const cancelPaymentFormButton = document.getElementById('cancelPaymentForm');
+const closeRecentPaymentsButton = document.getElementById('closeRecentPayments');
+const paymentFormTitle = document.getElementById('paymentFormTitle');
 
 function showFlash(message, isError = false) {
   const flash = document.createElement('div');
@@ -137,11 +144,7 @@ function renderMap(spots) {
     element.style.width = `${spot.placement?.w || 6}%`;
     element.style.height = `${spot.placement?.h || 10}%`;
     element.setAttribute('data-select-spot', String(spot.id));
-    element.innerHTML = `
-      <strong class="spot-number">${spot.spotNumber}</strong>
-      <span class="spot-name">${spot.tenant?.fullName || spot.assignedName || 'Disponible'}</span>
-      <span class="spot-meta">${buildSpotMeta(spot)}</span>
-    `;
+    element.innerHTML = `<strong class="spot-number">${spot.spotNumber}</strong>`;
     parkingMap.appendChild(element);
   });
 
@@ -169,6 +172,38 @@ function renderRequests(entries) {
     `;
     requestsList.appendChild(item);
   });
+}
+
+function renderRecentPayments(payments) {
+  recentPaymentsList.innerHTML = '';
+
+  if (!payments.length) {
+    recentPaymentsList.innerHTML = '<div class="list-item"><p>No hay pagos registrados todavia.</p></div>';
+    return;
+  }
+
+  payments.forEach((payment) => {
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = `
+      <h3>${payment.tenantName} · ${formatMoney(payment.amount)}</h3>
+      <p>${payment.paymentMethod} · ${payment.concept}</p>
+      <p>${new Date(payment.paidAt).toLocaleString('es-MX')} · ${payment.plate}</p>
+    `;
+    recentPaymentsList.appendChild(item);
+  });
+}
+
+function openRecentPaymentsModal() {
+  recentPaymentsModal.classList.remove('hidden');
+  recentPaymentsModal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+}
+
+function closeRecentPaymentsModal() {
+  recentPaymentsModal.classList.add('hidden');
+  recentPaymentsModal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
 }
 
 function renderSpotOptions(availableSpots, currentSpotId = '') {
@@ -238,10 +273,28 @@ function clearTenantForm(availableSpots) {
   renderSpotOptions(availableSpots);
 }
 
+function hidePaymentForm() {
+  paymentForm.reset();
+  paymentForm.tenantId.value = '';
+  paymentForm.classList.add('hidden');
+}
+
+function openPaymentForm(tenant) {
+  paymentForm.tenantId.value = tenant.id;
+  paymentForm.amount.value = tenant.pendingAmount > 0 ? tenant.pendingAmount : tenant.monthlyFee;
+  paymentForm.paymentMethod.value = tenant.paymentMethod || 'efectivo';
+  paymentForm.concept.value = 'Pago registrado desde administrador';
+  paymentFormTitle.textContent = `Registrar pago de ${tenant.fullName} · Saldo actual ${formatMoney(tenant.pendingAmount)}`;
+  paymentForm.classList.remove('hidden');
+  paymentForm.amount.focus();
+  paymentForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 async function loadDashboard() {
-  const [dashboard, tenantsPayload] = await Promise.all([
+  const [dashboard, tenantsPayload, paymentsPayload] = await Promise.all([
     api('/api/dashboard'),
-    api('/api/tenants')
+    api('/api/tenants'),
+    api('/api/payments')
   ]);
 
   state.dashboard = dashboard;
@@ -255,6 +308,7 @@ async function loadDashboard() {
   renderMap(dashboard.spots);
   renderRequests(dashboard.activeEntries);
   renderTenants(tenantsPayload.tenants, tenantsPayload.availableSpots);
+  renderRecentPayments(paymentsPayload.payments);
 }
 
 tenantForm.addEventListener('submit', async (event) => {
@@ -307,12 +361,57 @@ refreshButton.addEventListener('click', () => {
   loadDashboard().catch((error) => showFlash(error.message, true));
 });
 
+openRecentPaymentsButton.addEventListener('click', () => {
+  openRecentPaymentsModal();
+});
+
 resetTenantFormButton.addEventListener('click', async () => {
   const payload = await api('/api/tenants');
   clearTenantForm(payload.availableSpots);
 });
 
+cancelPaymentFormButton.addEventListener('click', () => {
+  hidePaymentForm();
+});
+
+closeRecentPaymentsButton.addEventListener('click', () => {
+  closeRecentPaymentsModal();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !recentPaymentsModal.classList.contains('hidden')) {
+    closeRecentPaymentsModal();
+  }
+});
+
+paymentForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const payload = Object.fromEntries(new FormData(paymentForm).entries());
+  payload.amount = Number(payload.amount || 0);
+
+  try {
+    if (!payload.tenantId || payload.amount <= 0) {
+      throw new Error('Captura un monto valido para registrar el pago.');
+    }
+
+    const result = await api(`/api/tenants/${payload.tenantId}/payment`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    hidePaymentForm();
+    showFlash(`Pago registrado por ${formatMoney(result.payment.amount)}. Saldo restante: ${formatMoney(result.tenant.pendingAmount)}.`);
+    await loadDashboard();
+  } catch (error) {
+    showFlash(error.message, true);
+  }
+});
+
 document.addEventListener('click', async (event) => {
+  if (event.target.closest('[data-close-recent-payments="true"]')) {
+    closeRecentPaymentsModal();
+    return;
+  }
+
   const editButton = event.target.closest('[data-edit-tenant]');
   const deleteButton = event.target.closest('[data-delete-tenant]');
   const payButton = event.target.closest('[data-pay-tenant]');
@@ -362,19 +461,13 @@ document.addEventListener('click', async (event) => {
     }
 
     if (payId) {
-      const amount = Number(window.prompt('Monto pagado', '800'));
-      if (!Number.isNaN(amount) && amount > 0) {
-        await api(`/api/tenants/${payId}/payment`, {
-          method: 'POST',
-          body: JSON.stringify({
-            amount,
-            paymentMethod: 'efectivo',
-            concept: 'Pago registrado desde administrador'
-          })
-        });
-        showFlash('Pago registrado.');
-        await loadDashboard();
+      const tenant = state.tenants.find((item) => item.id === Number(payId));
+      if (!tenant) {
+        throw new Error('Inquilino no encontrado para registrar el pago.');
       }
+
+      openPaymentForm(tenant);
+      return;
     }
 
     if (completeExitId) {

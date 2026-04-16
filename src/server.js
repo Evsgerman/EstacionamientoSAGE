@@ -4,6 +4,7 @@ const {
   getDashboardData,
   listTenants,
   listAvailableSpots,
+  listRecentPayments,
   createTenant,
   updateTenant,
   removeTenant,
@@ -58,6 +59,10 @@ app.get('/api/tenants', (_req, res) => {
   });
 });
 
+app.get('/api/payments', (_req, res) => {
+  res.json({ payments: listRecentPayments() });
+});
+
 app.post('/api/tenants', (req, res) => {
   try {
     const payload = normalizeTenantPayload(req.body);
@@ -101,13 +106,13 @@ app.delete('/api/tenants/:id', (req, res) => {
 
 app.post('/api/tenants/:id/payment', (req, res) => {
   try {
-    const tenant = createPayment({
+    const result = createPayment({
       tenantId: Number(req.params.id),
       amount: Number(req.body.amount),
       paymentMethod: String(req.body.paymentMethod || 'efectivo'),
       concept: String(req.body.concept || 'Pago de pension')
     });
-    res.json(tenant);
+    res.json(result);
   } catch (error) {
     handleError(res, error);
   }

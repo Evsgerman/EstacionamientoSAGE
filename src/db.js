@@ -334,6 +334,33 @@ function listAvailableSpots() {
   }));
 }
 
+function mapPayment(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    tenantName: row.full_name,
+    plate: row.plate,
+    amount: row.amount,
+    paymentMethod: row.payment_method,
+    concept: row.concept,
+    paidAt: row.paid_at
+  };
+}
+
+function listRecentPayments(limit = 10) {
+  return db.prepare(`
+    SELECT p.*, t.full_name, t.plate
+    FROM payments p
+    JOIN tenants t ON t.id = p.tenant_id
+    ORDER BY p.paid_at DESC, p.id DESC
+    LIMIT ?
+  `).all(limit).map(mapPayment);
+}
+
 function getTenantCount() {
   return db.prepare("SELECT COUNT(*) AS total FROM tenants WHERE status = 'activo'").get().total;
 }
@@ -427,21 +454,52 @@ function removeTenant(id) {
 }
 
 function createPayment({ tenantId, amount, paymentMethod, concept }) {
-  db.prepare(`
-    INSERT INTO payments (tenant_id, amount, payment_method, concept)
-    VALUES (?, ?, ?, ?)
-  `).run(tenantId, amount, paymentMethod, concept);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('El monto del pago debe ser mayor a cero.');
+  }
 
-  db.prepare(`
-    UPDATE tenants
-    SET pending_amount = MAX(0, pending_amount - ?),
-        is_debtor = CASE WHEN MAX(0, pending_amount - ?) > 0 THEN 1 ELSE 0 END,
-        payment_method = ?,
-        updated_at = CURRENT_TIMESTAMP
+  const tenant = db.prepare(`
+    SELECT id, status
+    FROM tenants
     WHERE id = ?
-  `).run(amount, amount, paymentMethod, tenantId);
+  `).get(tenantId);
 
-  return getTenantById(tenantId);
+  if (!tenant || tenant.status !== 'activo') {
+    throw new Error('Inquilino no encontrado para registrar el pago.');
+  }
+
+  db.exec('BEGIN');
+
+  try {
+    const result = db.prepare(`
+      INSERT INTO payments (tenant_id, amount, payment_method, concept)
+      VALUES (?, ?, ?, ?)
+    `).run(tenantId, amount, paymentMethod, concept);
+
+    db.prepare(`
+      UPDATE tenants
+      SET pending_amount = MAX(0, pending_amount - ?),
+          is_debtor = CASE WHEN MAX(0, pending_amount - ?) > 0 THEN 1 ELSE 0 END,
+          payment_method = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(amount, amount, paymentMethod, tenantId);
+
+    db.exec('COMMIT');
+
+    return {
+      payment: mapPayment(db.prepare(`
+        SELECT p.*, t.full_name, t.plate
+        FROM payments p
+        JOIN tenants t ON t.id = p.tenant_id
+        WHERE p.id = ?
+      `).get(result.lastInsertRowid)),
+      tenant: getTenantById(tenantId)
+    };
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 function createOrUpdateDebt({ tenantId, pendingAmount, paymentMethod }) {
@@ -615,6 +673,7 @@ module.exports = {
   getDashboardData,
   listTenants,
   listAvailableSpots,
+  listRecentPayments,
   createTenant,
   getTenantById,
   updateTenant,
