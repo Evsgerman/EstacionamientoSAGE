@@ -1,0 +1,35 @@
+<svg width="1104" height="768" viewBox="0 0 1104 768" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sageBlue" x1="57" y1="145" x2="1068" y2="145" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#41AAFF"/>
+      <stop offset="1" stop-color="#312B8E"/>
+    </linearGradient>
+    <linearGradient id="sageRed" x1="244" y1="296" x2="485" y2="539" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F07A72"/>
+      <stop offset="1" stop-color="#B31530"/>
+    </linearGradient>
+    <linearGradient id="sageTail" x1="996" y1="179" x2="1068" y2="179" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F26675"/>
+      <stop offset="1" stop-color="#B21431"/>
+    </linearGradient>
+    <linearGradient id="sageSilver" x1="47" y1="218" x2="162" y2="218" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5F5F5"/>
+      <stop offset="1" stop-color="#BFC2C8"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M57 209C104 163 179 145 291 152C389 158 477 184 580 184C639 184 695 174 760 154C852 126 950 123 1068 146C1008 186 948 194 879 191C800 188 731 178 644 186C545 195 445 195 341 187C224 178 132 180 57 209Z" fill="url(#sageBlue)"/>
+  <path d="M277 157C412 91 545 59 677 51C817 43 936 66 1054 147C954 123 861 114 754 113C662 112 579 118 501 138C417 159 352 166 277 157Z" fill="url(#sageBlue)"/>
+  <path d="M648 185C753 182 853 181 960 159C1002 151 1037 149 1060 162C1020 211 959 223 869 222C789 221 717 213 648 185Z" fill="#45A8FF"/>
+  <path d="M994 191C1017 191 1042 184 1068 169C1068 193 1068 211 1061 223C1050 241 1024 239 994 191Z" fill="url(#sageTail)"/>
+  <path d="M49 241C60 209 84 194 124 194H163C154 224 130 241 88 241H49Z" fill="url(#sageSilver)"/>
+
+  <g transform="translate(22 296)">
+    <path d="M0 188L32 56C51 18 103 0 168 0C209 0 245 9 268 24L258 79C237 71 206 64 172 64C127 64 93 75 86 103C81 124 96 140 140 151C211 169 233 203 223 257C208 336 134 390 42 390C4 390 -31 383 -52 370L-42 314C-14 328 17 335 53 335C97 335 125 324 132 298C138 278 125 263 83 251C10 230 -12 197 0 144C17 62 91 0 192 0" fill="url(#sageBlue)" transform="translate(52 0)"/>
+    <path d="M224 388L364 0H419L487 388H441L428 300H331L283 388H224ZM348 238H421L404 110L348 238Z" fill="url(#sageRed)"/>
+    <path d="M704 228H614L623 170H808L775 371C730 387 682 395 633 395C478 395 407 306 432 174C458 39 568 -6 711 -6C772 -6 821 5 852 22L839 78C806 61 764 51 713 51C622 51 550 98 533 186C515 276 562 335 652 335C673 335 691 332 708 325L725 269H696L704 228Z" fill="#1D1D22"/>
+    <path d="M840 0H1047L1029 58H914L897 158H1005L988 215H880L858 330H992L975 388H765L840 0Z" fill="#1D1D22"/>
+  </g>
+
+  <text x="559" y="662" text-anchor="middle" fill="#212128" font-family="Sora, Arial, sans-serif" font-size="62" font-style="italic" letter-spacing="10">ESTACIONAMIENTO</text>
+</svg>

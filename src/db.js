@@ -56,6 +56,9 @@ db.exec(`
     amount REAL NOT NULL,
     payment_method TEXT NOT NULL,
     concept TEXT NOT NULL,
+    balance_after REAL NOT NULL DEFAULT 0,
+    paid_in_full INTEGER NOT NULL DEFAULT 0,
+    receipt_folio TEXT,
     paid_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id)
   );
@@ -78,6 +81,9 @@ db.exec(`
 
 ensureColumn('parking_spots', 'current_state', "current_state TEXT NOT NULL DEFAULT 'libre'");
 db.exec("UPDATE parking_spots SET current_state = 'libre' WHERE current_state IS NULL OR current_state = '';");
+ensureColumn('payments', 'balance_after', 'balance_after REAL NOT NULL DEFAULT 0');
+ensureColumn('payments', 'paid_in_full', 'paid_in_full INTEGER NOT NULL DEFAULT 0');
+ensureColumn('payments', 'receipt_folio', 'receipt_folio TEXT');
 
 const parkingLayoutMap = new Map(parkingLayout.map((spot) => [spot.spotNumber, spot]));
 
@@ -344,21 +350,38 @@ function mapPayment(row) {
     tenantId: row.tenant_id,
     tenantName: row.full_name,
     plate: row.plate,
+    assignedSpotNumber: row.spot_number,
+    tenantType: row.tenant_type,
     amount: row.amount,
     paymentMethod: row.payment_method,
     concept: row.concept,
-    paidAt: row.paid_at
+    balanceAfter: row.balance_after,
+    paidInFull: Boolean(row.paid_in_full),
+    receiptFolio: row.receipt_folio,
+    paidAt: row.paid_at,
+    receiptUrl: row.paid_in_full ? `/api/payments/${row.id}/receipt.pdf` : null
   };
 }
 
 function listRecentPayments(limit = 10) {
   return db.prepare(`
-    SELECT p.*, t.full_name, t.plate
+    SELECT p.*, t.full_name, t.plate, t.tenant_type, ps.spot_number
     FROM payments p
     JOIN tenants t ON t.id = p.tenant_id
+    LEFT JOIN parking_spots ps ON ps.id = t.assigned_spot_id
     ORDER BY p.paid_at DESC, p.id DESC
     LIMIT ?
   `).all(limit).map(mapPayment);
+}
+
+function getPaymentById(id) {
+  return mapPayment(db.prepare(`
+    SELECT p.*, t.full_name, t.plate, t.tenant_type, ps.spot_number
+    FROM payments p
+    JOIN tenants t ON t.id = p.tenant_id
+    LEFT JOIN parking_spots ps ON ps.id = t.assigned_spot_id
+    WHERE p.id = ?
+  `).get(id));
 }
 
 function getTenantCount() {
@@ -459,7 +482,7 @@ function createPayment({ tenantId, amount, paymentMethod, concept }) {
   }
 
   const tenant = db.prepare(`
-    SELECT id, status
+    SELECT id, status, tenant_type, pending_amount
     FROM tenants
     WHERE id = ?
   `).get(tenantId);
@@ -472,8 +495,8 @@ function createPayment({ tenantId, amount, paymentMethod, concept }) {
 
   try {
     const result = db.prepare(`
-      INSERT INTO payments (tenant_id, amount, payment_method, concept)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO payments (tenant_id, amount, payment_method, concept, balance_after, paid_in_full, receipt_folio)
+      VALUES (?, ?, ?, ?, 0, 0, NULL)
     `).run(tenantId, amount, paymentMethod, concept);
 
     db.prepare(`
@@ -485,16 +508,23 @@ function createPayment({ tenantId, amount, paymentMethod, concept }) {
       WHERE id = ?
     `).run(amount, amount, paymentMethod, tenantId);
 
+    const updatedTenant = getTenantById(tenantId);
+    const paidInFull = tenant.tenant_type === 'pension' && Number(tenant.pending_amount || 0) > 0 && updatedTenant.pendingAmount === 0;
+    const receiptFolio = paidInFull
+      ? `SAGE-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(result.lastInsertRowid).padStart(5, '0')}`
+      : null;
+
+    db.prepare(`
+      UPDATE payments
+      SET balance_after = ?, paid_in_full = ?, receipt_folio = ?
+      WHERE id = ?
+    `).run(updatedTenant.pendingAmount, paidInFull ? 1 : 0, receiptFolio, result.lastInsertRowid);
+
     db.exec('COMMIT');
 
     return {
-      payment: mapPayment(db.prepare(`
-        SELECT p.*, t.full_name, t.plate
-        FROM payments p
-        JOIN tenants t ON t.id = p.tenant_id
-        WHERE p.id = ?
-      `).get(result.lastInsertRowid)),
-      tenant: getTenantById(tenantId)
+      payment: getPaymentById(result.lastInsertRowid),
+      tenant: updatedTenant
     };
   } catch (error) {
     db.exec('ROLLBACK');
@@ -674,6 +704,7 @@ module.exports = {
   listTenants,
   listAvailableSpots,
   listRecentPayments,
+  getPaymentById,
   createTenant,
   getTenantById,
   updateTenant,

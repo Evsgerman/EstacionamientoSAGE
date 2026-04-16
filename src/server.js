@@ -1,10 +1,12 @@
 const path = require('path');
 const express = require('express');
+const { generatePaymentReceiptPdf } = require('./paymentReceipt');
 const {
   getDashboardData,
   listTenants,
   listAvailableSpots,
   listRecentPayments,
+  getPaymentById,
   createTenant,
   updateTenant,
   removeTenant,
@@ -61,6 +63,24 @@ app.get('/api/tenants', (_req, res) => {
 
 app.get('/api/payments', (_req, res) => {
   res.json({ payments: listRecentPayments() });
+});
+
+app.get('/api/payments/:id/receipt.pdf', (req, res) => {
+  try {
+    const payment = getPaymentById(Number(req.params.id));
+
+    if (!payment) {
+      return res.status(404).json({ error: 'Pago no encontrado.' });
+    }
+
+    if (!payment.paidInFull || payment.tenantType !== 'pension') {
+      return res.status(400).json({ error: 'Ese pago no genera comprobante de pension liquidada.' });
+    }
+
+    generatePaymentReceiptPdf(res, payment);
+  } catch (error) {
+    handleError(res, error);
+  }
 });
 
 app.post('/api/tenants', (req, res) => {

@@ -12,12 +12,15 @@
   <body>
     <div class="page-shell">
       <header class="hero">
-        <div>
-          <p class="eyebrow">Sistema de control</p>
-          <h1>Administracion del estacionamiento</h1>
-          <p class="hero-copy">
-            Controla entradas, salidas, pensionados, pagos, adeudos y accesos de inquilinos con cajones fijos.
-          </p>
+        <div class="hero-brand">
+          <img class="brand-logo" src="/assets/sage-logo.svg" alt="SAGE Estacionamiento" />
+          <div>
+            <p class="eyebrow">Sistema de control</p>
+            <h1>Administracion del estacionamiento</h1>
+            <p class="hero-copy">
+              Controla entradas, salidas, pensionados, pagos, adeudos y accesos de inquilinos con cajones fijos.
+            </p>
+          </div>
         </div>
         <div class="hero-actions">
           <a class="button secondary" href="/tenant.html">Portal de inquilinos</a>
@@ -177,6 +180,7 @@
               Concepto
               <input type="text" name="concept" value="Pago registrado desde administrador" required />
             </label>
+            <p class="payment-note">Si el saldo queda en cero, el sistema generara automaticamente el comprobante PDF de pension liquidada.</p>
             <div class="form-actions">
               <button class="button" type="submit">Confirmar pago</button>
             </div>

@@ -54,6 +54,27 @@ body.modal-open {
   align-items: center;
 }
 
+.hero-brand {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.compact-brand {
+  align-items: flex-start;
+}
+
+.brand-logo {
+  width: clamp(190px, 22vw, 320px);
+  height: auto;
+  flex: 0 0 auto;
+  display: block;
+}
+
+.small-logo {
+  width: clamp(150px, 18vw, 230px);
+}
+
 .eyebrow {
   margin: 0 0 10px;
   text-transform: uppercase;
@@ -185,9 +206,19 @@ td,
   margin-bottom: 18px;
 }
 
+.payment-note,
 .notes-field,
 .form-actions {
   grid-column: 1 / -1;
+}
+
+.payment-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(246, 229, 212, 0.7);
+  color: var(--accent-dark);
+  font-size: 0.92rem;
 }
 
 .payment-panel-header {
@@ -218,19 +249,21 @@ textarea {
 
 .parking-layout-grid {
   display: grid;
-  grid-template-columns: minmax(820px, 1fr) 320px;
+  grid-template-columns: minmax(700px, 1fr) 320px;
   gap: 18px;
   align-items: start;
 }
 
 .parking-map-wrap {
+  display: flex;
+  justify-content: center;
   overflow: auto;
   padding-bottom: 6px;
 }
 
 .parking-map {
-  width: 100%;
-  min-width: 1040px;
+  width: min(100%, 900px);
+  min-width: 860px;
   aspect-ratio: 1066 / 748;
   border-radius: 26px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 235, 223, 0.98));
@@ -253,13 +286,16 @@ textarea {
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
-.parking-spot::after {
-  content: '';
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
-  height: 6px;
+.spot-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.spot-line {
+  width: 30px;
+  height: 5px;
   border-radius: 999px;
   background: #f3c322;
 }
@@ -300,7 +336,7 @@ textarea {
 
 .spot-number {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 2rem;
+  font-size: clamp(1.35rem, 1.2vw + 0.8rem, 1.9rem);
   font-weight: 700;
   color: #111;
 }
@@ -378,6 +414,20 @@ td {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.list-item-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.small-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  font-size: 0.88rem;
 }
 
 .actions-inline button {
@@ -520,12 +570,17 @@ td {
     flex-direction: column;
   }
 
+  .hero-brand {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .tenant-form-grid,
   .payment-form-grid {
     grid-template-columns: 1fr;
   }
 
   .parking-map {
-    min-width: 960px;
+    min-width: 760px;
   }
 }

@@ -144,7 +144,12 @@ function renderMap(spots) {
     element.style.width = `${spot.placement?.w || 6}%`;
     element.style.height = `${spot.placement?.h || 10}%`;
     element.setAttribute('data-select-spot', String(spot.id));
-    element.innerHTML = `<strong class="spot-number">${spot.spotNumber}</strong>`;
+    element.innerHTML = `
+      <span class="spot-mark">
+        <strong class="spot-number">${spot.spotNumber}</strong>
+        <span class="spot-line" aria-hidden="true"></span>
+      </span>
+    `;
     parkingMap.appendChild(element);
   });
 
@@ -189,6 +194,9 @@ function renderRecentPayments(payments) {
       <h3>${payment.tenantName} · ${formatMoney(payment.amount)}</h3>
       <p>${payment.paymentMethod} · ${payment.concept}</p>
       <p>${new Date(payment.paidAt).toLocaleString('es-MX')} · ${payment.plate}</p>
+      <div class="list-item-actions">
+        ${payment.receiptUrl ? `<a class="button secondary small-button" href="${payment.receiptUrl}" target="_blank" rel="noopener">Descargar comprobante PDF</a>` : ''}
+      </div>
     `;
     recentPaymentsList.appendChild(item);
   });
@@ -399,8 +407,15 @@ paymentForm.addEventListener('submit', async (event) => {
       body: JSON.stringify(payload)
     });
     hidePaymentForm();
-    showFlash(`Pago registrado por ${formatMoney(result.payment.amount)}. Saldo restante: ${formatMoney(result.tenant.pendingAmount)}.`);
     await loadDashboard();
+
+    if (result.payment.receiptUrl) {
+      window.open(result.payment.receiptUrl, '_blank', 'noopener');
+      showFlash(`Pago registrado por ${formatMoney(result.payment.amount)}. Saldo restante: ${formatMoney(result.tenant.pendingAmount)}. Se genero el comprobante PDF.`);
+      return;
+    }
+
+    showFlash(`Pago registrado por ${formatMoney(result.payment.amount)}. Saldo restante: ${formatMoney(result.tenant.pendingAmount)}.`);
   } catch (error) {
     showFlash(error.message, true);
   }
