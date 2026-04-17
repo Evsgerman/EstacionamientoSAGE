@@ -8,6 +8,7 @@ const {
   listAvailableSpots,
   listRecentPayments,
   getPaymentById,
+  getLatestPaidReceiptForTenant,
   createTenant,
   updateTenant,
   removeTenant,
@@ -26,7 +27,10 @@ const app = express();
 const port = process.env.PORT || 3000;
 const ADMIN_SESSION_COOKIE = 'sage_admin_session';
 const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const TENANT_SESSION_COOKIE = 'sage_tenant_session';
+const TENANT_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const adminSessions = new Map();
+const tenantSessions = new Map();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -58,10 +62,31 @@ function clearExpiredAdminSessions() {
   }
 }
 
+function clearExpiredTenantSessions() {
+  const now = Date.now();
+  for (const [token, session] of tenantSessions.entries()) {
+    if (session.expiresAt <= now) {
+      tenantSessions.delete(token);
+    }
+  }
+}
+
 function createAdminSession() {
   clearExpiredAdminSessions();
   const token = crypto.randomUUID();
   adminSessions.set(token, Date.now() + ADMIN_SESSION_TTL_MS);
+  return token;
+}
+
+function createTenantSession(tenant) {
+  clearExpiredTenantSessions();
+  const token = crypto.randomUUID();
+  tenantSessions.set(token, {
+    tenantId: tenant.id,
+    fullName: tenant.fullName,
+    plate: tenant.plate,
+    expiresAt: Date.now() + TENANT_SESSION_TTL_MS
+  });
   return token;
 }
 
@@ -82,12 +107,37 @@ function getAdminSession(req) {
   return token;
 }
 
+function getTenantSession(req) {
+  clearExpiredTenantSessions();
+  const cookies = parseCookies(req.headers.cookie || '');
+  const token = cookies[TENANT_SESSION_COOKIE];
+  if (!token) {
+    return null;
+  }
+
+  const session = tenantSessions.get(token);
+  if (!session || session.expiresAt <= Date.now()) {
+    tenantSessions.delete(token);
+    return null;
+  }
+
+  return session;
+}
+
 function setAdminSessionCookie(res, token) {
   res.setHeader('Set-Cookie', `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(token)}; Max-Age=${Math.floor(ADMIN_SESSION_TTL_MS / 1000)}; Path=/; HttpOnly; SameSite=Lax`);
 }
 
+function setTenantSessionCookie(res, token) {
+  res.setHeader('Set-Cookie', `${TENANT_SESSION_COOKIE}=${encodeURIComponent(token)}; Max-Age=${Math.floor(TENANT_SESSION_TTL_MS / 1000)}; Path=/; HttpOnly; SameSite=Lax`);
+}
+
 function clearAdminSessionCookie(res) {
   res.setHeader('Set-Cookie', `${ADMIN_SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`);
+}
+
+function clearTenantSessionCookie(res) {
+  res.setHeader('Set-Cookie', `${TENANT_SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`);
 }
 
 function requireAdminSession(req, res, next) {
@@ -144,6 +194,18 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
+function requireTenantSession(req, res, next) {
+  const tenantSession = getTenantSession(req);
+  if (!tenantSession) {
+    clearTenantSessionCookie(res);
+    res.status(401).json({ error: 'Acceso de inquilino requerido.' });
+    return;
+  }
+
+  req.tenantSession = tenantSession;
+  next();
+}
+
 app.post('/api/admin/logout', (req, res) => {
   const sessionToken = getAdminSession(req);
   if (sessionToken) {
@@ -169,7 +231,35 @@ app.post('/api/access/login', (req, res) => {
       throw new Error('Acceso invalido. Verifica nombre y placa.');
     }
 
+    const token = createTenantSession(tenant);
+    setTenantSessionCookie(res, token);
     res.json(tenant);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+app.get('/api/access/receipt.pdf', requireTenantSession, async (req, res) => {
+  try {
+    const tenant = findTenantAccess({
+      fullName: req.tenantSession.fullName,
+      plate: req.tenantSession.plate
+    });
+
+    if (!tenant || !tenant.accessEnabled) {
+      clearTenantSessionCookie(res);
+      return res.status(401).json({ error: 'La sesion del inquilino ya no es valida.' });
+    }
+
+    const latestReceipt = tenant.pendingAmount === 0
+      ? getLatestPaidReceiptForTenant(tenant.id)
+      : null;
+
+    if (!latestReceipt || latestReceipt.tenantType !== 'pension') {
+      return res.status(400).json({ error: 'El comprobante solo esta disponible cuando la pension esta liquidada.' });
+    }
+
+    await generatePaymentReceiptPdf(res, latestReceipt);
   } catch (error) {
     handleError(res, error);
   }

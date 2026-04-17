@@ -2,6 +2,7 @@ const accessForm = document.getElementById('accessForm');
 const tenantPanel = document.getElementById('tenantPanel');
 const tenantSummary = document.getElementById('tenantSummary');
 const exitRequestForm = document.getElementById('exitRequestForm');
+const tenantReceiptButton = document.getElementById('tenantReceiptButton');
 
 let currentTenant = null;
 
@@ -34,6 +35,16 @@ function formatMoney(value) {
   }).format(Number(value || 0));
 }
 
+function syncReceiptButton(tenant) {
+  const enabled = Boolean(tenant?.receiptAvailable && Number(tenant?.pendingAmount || 0) === 0);
+  tenantReceiptButton.classList.toggle('disabled-link', !enabled);
+  tenantReceiptButton.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+  tenantReceiptButton.tabIndex = enabled ? 0 : -1;
+  tenantReceiptButton.title = enabled
+    ? (tenant.latestReceiptFolio ? `Abrir ${tenant.latestReceiptFolio}` : 'Abrir comprobante de pago')
+    : 'Disponible solo cuando la pension este totalmente pagada';
+}
+
 function renderTenant(tenant) {
   tenantSummary.innerHTML = `
     <p><strong>Nombre:</strong> ${tenant.fullName}</p>
@@ -43,8 +54,16 @@ function renderTenant(tenant) {
     <p><strong>Adeudo pendiente:</strong> ${formatMoney(tenant.pendingAmount)}</p>
     <p><strong>Estado:</strong> ${tenant.isDebtor ? 'Deudor' : 'Al corriente'}</p>
   `;
+  syncReceiptButton(tenant);
   tenantPanel.classList.remove('hidden');
 }
+
+tenantReceiptButton.addEventListener('click', (event) => {
+  if (tenantReceiptButton.getAttribute('aria-disabled') === 'true') {
+    event.preventDefault();
+    showFlash('El comprobante se habilita cuando la pension este liquidada.', true);
+  }
+});
 
 accessForm.addEventListener('submit', async (event) => {
   event.preventDefault();

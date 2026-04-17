@@ -464,6 +464,18 @@ function getPaymentById(id) {
   `).get(id));
 }
 
+function getLatestPaidReceiptForTenant(tenantId) {
+  return mapPayment(db.prepare(`
+    SELECT p.*, t.full_name, t.plate, t.tenant_type, ps.spot_number
+    FROM payments p
+    JOIN tenants t ON t.id = p.tenant_id
+    LEFT JOIN parking_spots ps ON ps.id = t.assigned_spot_id
+    WHERE p.tenant_id = ? AND p.paid_in_full = 1
+    ORDER BY p.paid_at DESC, p.id DESC
+    LIMIT 1
+  `).get(tenantId));
+}
+
 function getTenantCount() {
   return db.prepare("SELECT COUNT(*) AS total FROM tenants WHERE status = 'activo'").get().total;
 }
@@ -591,7 +603,7 @@ function createPayment({ tenantId, amount, paymentMethod, concept, paidMonth }) 
     `).run(amount, amount, paymentMethod, tenantId);
 
     const updatedTenant = getTenantById(tenantId);
-    const paidInFull = tenant.tenant_type === 'pension' && Number(tenant.pending_amount || 0) > 0 && updatedTenant.pendingAmount === 0;
+    const paidInFull = tenant.tenant_type === 'pension' && updatedTenant.pendingAmount === 0;
     const receiptFolio = paidInFull
       ? buildReceiptFolio({ paidMonth: normalizedPaidMonth })
       : null;
@@ -780,7 +792,21 @@ function findTenantAccess({ fullName, plate }) {
     WHERE lower(t.full_name) = lower(?) AND upper(t.plate) = upper(?) AND t.status = 'activo'
   `).get(fullName, plate);
 
-  return mapTenant(row);
+  const tenant = mapTenant(row);
+  if (!tenant) {
+    return null;
+  }
+
+  const latestReceipt = tenant.pendingAmount === 0 && tenant.tenantType === 'pension'
+    ? getLatestPaidReceiptForTenant(tenant.id)
+    : null;
+
+  return {
+    ...tenant,
+    receiptAvailable: Boolean(latestReceipt),
+    latestReceiptId: latestReceipt?.id || null,
+    latestReceiptFolio: latestReceipt?.receiptFolio || null
+  };
 }
 
 function verifyAdminCredentials({ username, password }) {
@@ -815,6 +841,7 @@ module.exports = {
   listAvailableSpots,
   listRecentPayments,
   getPaymentById,
+  getLatestPaidReceiptForTenant,
   createTenant,
   getTenantById,
   updateTenant,

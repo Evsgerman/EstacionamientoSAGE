@@ -50,10 +50,13 @@
           <div class="panel-header">
             <div>
               <h2>Resumen del inquilino</h2>
-              <p>Consulta tu cajon, adeudo y genera solicitud de salida.</p>
+              <p>Consulta tu cajon, adeudo, genera solicitud de salida y descarga tu comprobante cuando la pension este liquidada.</p>
             </div>
           </div>
           <div id="tenantSummary" class="summary-box"></div>
+          <div class="tenant-actions">
+            <a class="button secondary disabled-link" id="tenantReceiptButton" href="/api/access/receipt.pdf" target="_blank" rel="noopener" aria-disabled="true">Comprobante de pago</a>
+          </div>
           <form id="exitRequestForm" class="stack-form">
             <button class="button" type="submit">Solicitar salida</button>
           </form>

@@ -474,6 +474,12 @@ td {
   margin-top: 12px;
 }
 
+.tenant-actions {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+}
+
 .small-button {
   display: inline-flex;
   align-items: center;
@@ -488,6 +494,12 @@ td {
   border: 1px solid rgba(139, 77, 21, 0.18);
   background: white;
   cursor: pointer;
+}
+
+.disabled-link {
+  pointer-events: none;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .spot-control {
