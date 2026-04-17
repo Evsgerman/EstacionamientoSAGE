@@ -304,6 +304,7 @@ function renderTenants(tenants, availableSpots) {
         <div class="actions-inline">
           <button type="button" data-edit-tenant="${tenant.id}">Editar</button>
           <button type="button" data-pay-tenant="${tenant.id}">Registrar pago</button>
+          <button type="button" data-receipt-tenant="${tenant.id}">Comprobante de pago</button>
           <button type="button" data-delete-tenant="${tenant.id}">Eliminar</button>
         </div>
       </td>
@@ -545,12 +546,14 @@ document.addEventListener('click', async (event) => {
   const editButton = event.target.closest('[data-edit-tenant]');
   const deleteButton = event.target.closest('[data-delete-tenant]');
   const payButton = event.target.closest('[data-pay-tenant]');
+  const receiptButton = event.target.closest('[data-receipt-tenant]');
   const completeExitButton = event.target.closest('[data-complete-exit]');
   const selectSpotButton = event.target.closest('[data-select-spot]');
   const stateButton = event.target.closest('[data-spot-state]');
   const editId = editButton?.getAttribute('data-edit-tenant');
   const deleteId = deleteButton?.getAttribute('data-delete-tenant');
   const payId = payButton?.getAttribute('data-pay-tenant');
+  const receiptId = receiptButton?.getAttribute('data-receipt-tenant');
   const completeExitId = completeExitButton?.getAttribute('data-complete-exit');
   const selectSpotId = selectSpotButton?.getAttribute('data-select-spot');
   const targetState = stateButton?.getAttribute('data-spot-state');
@@ -597,6 +600,21 @@ document.addEventListener('click', async (event) => {
       }
 
       openPaymentForm(tenant);
+      return;
+    }
+
+    if (receiptId) {
+      const receiptStatus = await api(`/api/tenants/${receiptId}/receipt-status`);
+
+      if (receiptStatus.eligible && receiptStatus.receiptUrl) {
+        window.open(receiptStatus.receiptUrl, '_blank', 'noopener');
+        showFlash(receiptStatus.receiptFolio
+          ? `Abriendo comprobante ${receiptStatus.receiptFolio}.`
+          : 'Abriendo comprobante de pago.');
+        return;
+      }
+
+      showFlash(receiptStatus.message || 'No fue posible generar el comprobante.', true);
       return;
     }
 

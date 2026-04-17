@@ -411,6 +411,27 @@ function normalizePaidMonth(paidMonth) {
   return new Date().toISOString().slice(0, 7);
 }
 
+function getCurrentPaidMonth() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+function formatPaidMonthLabel(paidMonth) {
+  const normalized = String(paidMonth || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(normalized)) {
+    return 'el mes actual';
+  }
+
+  const label = new Intl.DateTimeFormat('es-MX', {
+    month: 'long',
+    year: 'numeric'
+  }).format(new Date(`${normalized}-01T12:00:00`));
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function buildMonthCode(paidMonth) {
   const monthIndex = Number(String(paidMonth || '').slice(5, 7));
   const monthCodes = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
@@ -474,6 +495,83 @@ function getLatestPaidReceiptForTenant(tenantId) {
     ORDER BY p.paid_at DESC, p.id DESC
     LIMIT 1
   `).get(tenantId));
+}
+
+function getCurrentMonthPaidReceiptForTenant(tenantId) {
+  const currentPaidMonth = getCurrentPaidMonth();
+
+  return mapPayment(db.prepare(`
+    SELECT p.*, t.full_name, t.plate, t.tenant_type, ps.spot_number
+    FROM payments p
+    JOIN tenants t ON t.id = p.tenant_id
+    LEFT JOIN parking_spots ps ON ps.id = t.assigned_spot_id
+    WHERE p.tenant_id = ?
+      AND p.paid_in_full = 1
+      AND p.paid_month = ?
+    ORDER BY p.paid_at DESC, p.id DESC
+    LIMIT 1
+  `).get(tenantId, currentPaidMonth));
+}
+
+function getTenantReceiptStatus(tenantId) {
+  const tenant = getTenantById(tenantId);
+
+  if (!tenant || tenant.status !== 'activo') {
+    throw new Error('Inquilino no encontrado para consultar el comprobante.');
+  }
+
+  const currentPaidMonth = getCurrentPaidMonth();
+  const monthLabel = formatPaidMonthLabel(currentPaidMonth);
+  const currentMonthReceipt = tenant.tenantType === 'pension'
+    ? getCurrentMonthPaidReceiptForTenant(tenantId)
+    : null;
+
+  if (tenant.tenantType !== 'pension') {
+    return {
+      eligible: false,
+      tenant,
+      currentPaidMonth,
+      monthLabel,
+      amountDue: 0,
+      message: 'El comprobante de pago solo aplica para pensionados.',
+      receiptUrl: null,
+      receiptId: null,
+      receiptFolio: null
+    };
+  }
+
+  if (currentMonthReceipt && Number(tenant.pendingAmount || 0) === 0) {
+    return {
+      eligible: true,
+      tenant,
+      currentPaidMonth,
+      monthLabel,
+      amountDue: 0,
+      message: `Pension liquidada de ${monthLabel}.`,
+      receiptUrl: `/api/payments/${currentMonthReceipt.id}/receipt.pdf`,
+      receiptId: currentMonthReceipt.id,
+      receiptFolio: currentMonthReceipt.receiptFolio
+    };
+  }
+
+  const amountDue = Number(tenant.pendingAmount || 0) > 0
+    ? Number(tenant.pendingAmount || 0)
+    : Number(tenant.monthlyFee || 0);
+
+  return {
+    eligible: false,
+    tenant,
+    currentPaidMonth,
+    monthLabel,
+    amountDue,
+    message: `Es deudor del mes actual (${monthLabel}) y debe ${new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN'
+    }).format(amountDue)}.`,
+    receiptUrl: null,
+    receiptId: null,
+    receiptFolio: null
+  };
 }
 
 function getTenantCount() {
@@ -797,15 +895,13 @@ function findTenantAccess({ fullName, plate }) {
     return null;
   }
 
-  const latestReceipt = tenant.pendingAmount === 0 && tenant.tenantType === 'pension'
-    ? getLatestPaidReceiptForTenant(tenant.id)
-    : null;
+  const receiptStatus = getTenantReceiptStatus(tenant.id);
 
   return {
     ...tenant,
-    receiptAvailable: Boolean(latestReceipt),
-    latestReceiptId: latestReceipt?.id || null,
-    latestReceiptFolio: latestReceipt?.receiptFolio || null
+    receiptAvailable: receiptStatus.eligible,
+    latestReceiptId: receiptStatus.receiptId,
+    latestReceiptFolio: receiptStatus.receiptFolio
   };
 }
 
@@ -842,6 +938,8 @@ module.exports = {
   listRecentPayments,
   getPaymentById,
   getLatestPaidReceiptForTenant,
+  getCurrentMonthPaidReceiptForTenant,
+  getTenantReceiptStatus,
   createTenant,
   getTenantById,
   updateTenant,

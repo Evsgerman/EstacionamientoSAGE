@@ -9,6 +9,7 @@ const {
   listRecentPayments,
   getPaymentById,
   getLatestPaidReceiptForTenant,
+  getTenantReceiptStatus,
   createTenant,
   updateTenant,
   removeTenant,
@@ -251,14 +252,13 @@ app.get('/api/access/receipt.pdf', requireTenantSession, async (req, res) => {
       return res.status(401).json({ error: 'La sesion del inquilino ya no es valida.' });
     }
 
-    const latestReceipt = tenant.pendingAmount === 0
-      ? getLatestPaidReceiptForTenant(tenant.id)
-      : null;
+    const receiptStatus = getTenantReceiptStatus(tenant.id);
 
-    if (!latestReceipt || latestReceipt.tenantType !== 'pension') {
-      return res.status(400).json({ error: 'El comprobante solo esta disponible cuando la pension esta liquidada.' });
+    if (!receiptStatus.eligible || !receiptStatus.receiptId) {
+      return res.status(400).json({ error: receiptStatus.message || 'El comprobante solo esta disponible cuando la pension esta liquidada.' });
     }
 
+    const latestReceipt = getPaymentById(receiptStatus.receiptId);
     await generatePaymentReceiptPdf(res, latestReceipt);
   } catch (error) {
     handleError(res, error);
@@ -364,6 +364,14 @@ app.post('/api/tenants/:id/payment', (req, res) => {
       paidMonth: String(req.body.paidMonth || '')
     });
     res.json(result);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+app.get('/api/tenants/:id/receipt-status', (req, res) => {
+  try {
+    res.json(getTenantReceiptStatus(Number(req.params.id)));
   } catch (error) {
     handleError(res, error);
   }
